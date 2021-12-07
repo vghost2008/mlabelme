@@ -34,6 +34,7 @@ class LabelFile(object):
 
     @staticmethod
     def load_image_file(filename):
+        print(f"Load {filename}")
         try:
             if not os.path.exists(filename):
                 filename1 = filename+".jpg"
@@ -98,14 +99,16 @@ class LabelFile(object):
                     )
                 )
 
-            if 'imageData' in data and data['imageData'] is not None:
+            '''if 'imageData' in data and data['imageData'] is not None:
                 imageData = base64.b64decode(data['imageData'])
                 if PY2 and QT4:
                     imageData = utils.img_data_to_png_data(imageData)
             else:
                 # relative path from label file to relative path from cwd
                 imagePath = osp.join(osp.dirname(filename), data['imagePath'])
-                imageData = self.load_image_file(imagePath)
+                imageData = self.load_image_file(imagePath)'''
+            imagePath = osp.splitext(filename)[0]
+            imageData = self.load_image_file(imagePath)
             flags = data.get('flags') or {}
             imagePath = data['imagePath']
             self._check_image_height_and_width(

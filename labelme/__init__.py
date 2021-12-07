@@ -2,7 +2,7 @@
 
 import logging
 import sys
-
+print(sys.path)
 from qtpy import QT_VERSION
 
 
