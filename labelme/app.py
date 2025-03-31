@@ -791,7 +791,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.editMode.setEnabled(not drawing)
         self.actions.undoLastPoint.setEnabled(drawing)
         self.actions.undo.setEnabled(not drawing)
-        self.actions.delete.setEnabled(not drawing)
+        #self.actions.delete.setEnabled(not drawing)  #wj
 
     def toggleDrawMode(self, edit=True, createMode='polygon'):
         self.canvas.setEditing(edit)
@@ -944,6 +944,51 @@ class MainWindow(QtWidgets.QMainWindow):
             filename = self.imageList[currIndex]
             if filename:
                 self.loadFile(filename)
+    
+    def reloadFileImg(self):
+        currIndex = self.fileListWidget.currentRow()
+        if currIndex < len(self.imageList):
+            filename = self.imageList[currIndex]
+            self.imageData = LabelFile.load_image_file(filename)
+            if self.imageData:
+                self.imagePath = filename
+            image = QtGui.QImage.fromData(self.imageData)
+    
+            if image.isNull():
+                formats = ['*.{}'.format(fmt.data().decode())
+                           for fmt in QtGui.QImageReader.supportedImageFormats()]
+                self.errorMessage(
+                    self.tr('Error opening file'),
+                    self.tr(
+                        '<p>Make sure <i>{0}</i> is a valid image file.<br/>'
+                        'Supported image formats: {1}</p>'
+                    ).format(filename, ','.join(formats))
+                )
+                self.status(self.tr("Error reading %s") % filename)
+                return False
+            self.image = image
+            self.filename = filename
+            if self._config['keep_prev']:
+                prev_shapes = self.canvas.shapes
+            self.canvas.loadPixmap(QtGui.QPixmap.fromImage(image),reset_shape=False)
+            self.canvas.update()
+
+    def keyPressEvent(self, ev):
+        key = ev.key()
+        print(ev,key,QtCore.Qt.Key_Minus,QtCore.Qt.Key_Plus)
+        if key == QtCore.Qt.Key_Minus:
+            if LabelFile.total_imgs_nr <= 1 or LabelFile.current_img_idx==0:
+                return super().keyPressEvent(ev)
+            LabelFile.current_img_idx = LabelFile.current_img_idx-1
+            print(f"Current img idx: {LabelFile.current_img_idx}, total imgs nr {LabelFile.total_imgs_nr}")
+            self.reloadFileImg()
+        elif key == QtCore.Qt.Key_Plus:
+            if LabelFile.current_img_idx>=LabelFile.total_imgs_nr-1:
+                return super().keyPressEvent(ev)
+            LabelFile.current_img_idx = LabelFile.current_img_idx+1
+            print(f"Current img idx: {LabelFile.current_img_idx}, total imgs nr {LabelFile.total_imgs_nr}")
+            self.reloadFileImg()
+        return super().keyPressEvent(ev)
 
     # React to canvas signals.
     def shapeSelectionChanged(self, selected_shapes):
@@ -1275,7 +1320,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if QtCore.QFile.exists(label_file) and \
                 LabelFile.is_label_file(label_file):
             try:
-                self.labelFile = LabelFile(label_file)
+                self.labelFile = LabelFile(label_file,filename)
             except LabelFileError as e:
                 self.errorMessage(
                     self.tr('Error opening file'),
@@ -1720,7 +1765,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def scanAllImages(self, folderPath):
         extensions = ['.%s' % fmt.data().decode("ascii").lower()
-                      for fmt in QtGui.QImageReader.supportedImageFormats()]
+                      for fmt in QtGui.QImageReader.supportedImageFormats()]+[".mci"]
         images = []
 
         for root, dirs, files in os.walk(folderPath):

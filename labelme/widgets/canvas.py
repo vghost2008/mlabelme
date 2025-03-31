@@ -675,6 +675,8 @@ class Canvas(QtWidgets.QWidget):
             self.update()
         elif key == QtCore.Qt.Key_Return and self.canCloseShape():
             self.finalise()
+        else:
+            return super().keyPressEvent(ev)
 
     def setLastLabel(self, text, flags):
         assert text
@@ -707,9 +709,10 @@ class Canvas(QtWidgets.QWidget):
             self.drawingPolygon.emit(False)
         self.repaint()
 
-    def loadPixmap(self, pixmap):
+    def loadPixmap(self, pixmap,reset_shape=True):
         self.pixmap = pixmap
-        self.shapes = []
+        if reset_shape:
+            self.shapes = []
         self.repaint()
 
     def loadShapes(self, shapes, replace=True):

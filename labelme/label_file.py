@@ -5,13 +5,65 @@ import os.path as osp
 import os
 
 import PIL.Image
-
+import pickle
 from labelme import __version__
 from labelme.logger import logger
 from labelme import PY2
 from labelme import QT4
 from labelme import utils
+import numpy as np
 
+def pillow2array(img,flag='color'):
+    # Handle exif orientation tag
+    #if flag in ['color', 'grayscale']:
+        #img = ImageOps.exif_transpose(img)
+    # If the image mode is not 'RGB', convert it to 'RGB' first.
+    if flag in ['color', 'color_ignore_orientation']:
+        if img.mode != 'RGB':
+            if img.mode != 'LA':
+                # Most formats except 'LA' can be directly converted to RGB
+                img = img.convert('RGB')
+            else:
+                # When the mode is 'LA', the default conversion will fill in
+                #  the canvas with black, which sometimes shadows black objects
+                #  in the foreground.
+                #
+                # Therefore, a random color (124, 117, 104) is used for canvas
+                img_rgba = img.convert('RGBA')
+                img = PIL.Image.new('RGB', img_rgba.size, (124, 117, 104))
+                img.paste(img_rgba, mask=img_rgba.split()[3])  # 3 is alpha
+        array = np.array(img)
+    elif flag in ['grayscale', 'grayscale_ignore_orientation']:
+        img = img.convert('L')
+        array = np.array(img)
+    else:
+        raise ValueError(
+            'flag must be "color", "grayscale", "unchanged", '
+            f'"color_ignore_orientation" or "grayscale_ignore_orientation"'
+            f' but got {flag}')
+    return array
+
+def decode_img(buffer,fmt='rgb'):
+    buff = io.BytesIO(buffer)
+    img = PIL.Image.open(buff)
+
+    if fmt=='rgb':
+        img = pillow2array(img, 'color')
+    else:
+        img = pillow2array(img, 'grayscale')
+
+    return img
+
+def mci_read(file_path):
+    with open(file_path,"rb") as f:
+        data = pickle.load(f)
+        shape = data['shape']
+        datas = []
+        for d in data['imgs']:
+            d = decode_img(d,fmt="grayscale")
+            datas.append(d)
+        datas = np.stack(datas,axis=-1)
+        return datas
 
 PIL.Image.MAX_IMAGE_PIXELS = None
 
@@ -24,9 +76,13 @@ class LabelFile(object):
 
     suffix = '.json'
 
-    def __init__(self, filename=None):
+    current_img_idx = 0
+    total_imgs_nr = 1
+    cur_file_name = ""
+    cur_img = None
+    def __init__(self, filename=None,imgpath=None):
         self.shapes = []
-        self.imagePath = None
+        self.imagePath = imgpath
         self.imageData = None
         if filename is not None:
             self.load(filename)
@@ -34,17 +90,36 @@ class LabelFile(object):
 
     @staticmethod
     def load_image_file(filename):
-        print(f"Load {filename}")
+        print(f"Load img {filename}")
         try:
-            if not os.path.exists(filename):
-                filename1 = filename+".jpg"
-                filename2 = filename + ".jpeg"
-                if os.path.exists(filename1):
-                    filename = filename1
-                elif os.path.exists(filename2):
-                    filename = filename2
-
-            image_pil = PIL.Image.open(filename)
+            if osp.splitext(filename)[1].lower() == ".mci":
+                if LabelFile.cur_file_name == filename and LabelFile.cur_img is not None:
+                    img = LabelFile.cur_img
+                else:
+                    img = mci_read(filename)
+                    LabelFile.cur_img = img
+                LabelFile.cur_file_name = filename
+                LabelFile.current_img_idx = min(max(0,LabelFile.current_img_idx),img.shape[2]-1)
+                LabelFile.total_imgs_nr = img.shape[2]
+                print(LabelFile.current_img_idx,img.shape,LabelFile.total_imgs_nr)
+                img = img[:,:,LabelFile.current_img_idx]
+                image_pil = PIL.Image.fromarray(img)
+            else:
+                LabelFile.cur_file_name = filename
+                
+                suffix = ['.jpg','.jpeg','.png','.bmp']
+                if not os.path.exists(filename):
+                    filename1 = filename+".jpg"
+                    filename2 = filename + ".jpeg"
+                    if os.path.exists(filename1):
+                        filename = filename1
+                    elif os.path.exists(filename2):
+                        filename = filename2
+    
+                LabelFile.cur_img = None
+                image_pil = PIL.Image.open(filename)
+                LabelFile.current_img_idx = 0
+                LabelFile.total_imgs_nr = 1
         except IOError:
             logger.error('Failed opening image file: {}'.format(filename))
             return
@@ -108,7 +183,7 @@ class LabelFile(object):
                 imagePath = osp.join(osp.dirname(filename), data['imagePath'])
                 imageData = self.load_image_file(imagePath)'''
             imagePath = osp.splitext(filename)[0]
-            imageData = self.load_image_file(imagePath)
+            imageData = self.load_image_file(self.imagePath)
             flags = data.get('flags') or {}
             imagePath = data['imagePath']
             self._check_image_height_and_width(
