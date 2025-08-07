@@ -988,6 +988,9 @@ class MainWindow(QtWidgets.QMainWindow):
             LabelFile.current_img_idx = LabelFile.current_img_idx+1
             print(f"Current img idx: {LabelFile.current_img_idx}, total imgs nr {LabelFile.total_imgs_nr}")
             self.reloadFileImg()
+        elif (ev.modifiers() & QtCore.Qt.ControlModifier) and (ev.key() == QtCore.Qt.Key_E):
+            self.canvas.enhancement()
+            pass
         return super().keyPressEvent(ev)
 
     # React to canvas signals.

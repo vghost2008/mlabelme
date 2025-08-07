@@ -5,6 +5,7 @@ from qtpy import QtWidgets
 from labelme import QT5
 from labelme.shape import Shape
 import labelme.utils
+from .algorithm import enhancement_gray_img
 
 
 # TODO(unknown):
@@ -743,4 +744,8 @@ class Canvas(QtWidgets.QWidget):
         self.restoreCursor()
         self.pixmap = None
         self.shapesBackups = []
+        self.update()
+
+    def enhancement(self):
+        self.pixmap = enhancement_gray_img(self.pixmap)
         self.update()
